@@ -1,4 +1,3 @@
-use clap::Error;
 use time::{Date, format_description::parse};
 use std::io::{Cursor, Read};
 use zip::ZipArchive;
@@ -24,7 +23,7 @@ mod omdb {
         pub Error: Option<String>,
     }
 
-    pub fn fetch_movie(title: &str, year: u32) -> Result<OmdbResponse, Box<dyn std::error::Error>> {
+    pub fn fetch_metadata(title: &str, year: u32) -> Result<OmdbResponse, Box<dyn std::error::Error>> {
         let url = format!(
             "http://www.omdbapi.com/?t={}&y={}&apikey={}",
             title, year, OMDB_API_KEY
@@ -37,9 +36,13 @@ mod omdb {
 
 #[derive(Debug)]
 pub struct Film {
-    pub name: String,
-    pub year: u32,
-    pub date_watched: Date,
+    name: String,
+    year: u32,
+    genre: Option<String>,
+    director: Option<String>,
+    plot: Option<String>,
+    date_watched: Date,
+    metadata_fetched: bool
 }
 
 impl Film {
@@ -47,41 +50,53 @@ impl Film {
         Film {
             name: name.to_string(),
             year,
-            date_watched
+            genre: None,
+            director: None,
+            plot: None,
+            date_watched,
+            metadata_fetched: false
         }
     }
 
-    pub fn extend(&self) -> Result<ExtendedFilm, Box<dyn std::error::Error>> {
-        ExtendedFilm::new(&self.name, self.year, self.date_watched)
+    pub fn name(&self) -> &str {
+        &self.name
     }
-}
 
-#[derive(Debug)]
-pub struct ExtendedFilm {
-    pub name: String,
-    pub year: u32,
-    pub genre: String,
-    pub director: String,
-    pub plot: String,
-    pub date_watched: Date,
-}
+    pub fn year(&self) -> u32 {
+        self.year
+    }
 
-impl ExtendedFilm {
-    pub fn new(name: &str, year: u32, date_watched: Date) -> Result<ExtendedFilm, Box<dyn std::error::Error>> {
-        let resp = omdb::fetch_movie(&name, year)?;
+    pub fn genre(&mut self) -> Option<&str> {
+        self.ensure_metadata();
+        self.genre.as_deref()
+    }
 
-        if resp.Response == "True" {
-            Ok(ExtendedFilm {
-                name: resp.Title.unwrap_or(name.to_string()),
-                year,
-                genre: resp.Genre.unwrap_or_else(|| "Unknown".to_string()),
-                director: resp.Director.unwrap_or_else(|| "Unknown".to_string()),
-                plot: resp.Plot.unwrap_or_else(|| "".to_string()),
-                date_watched,
-            })
-        } else {
-            Err(format!("OMDb error: {:?}", resp.Error).into())
+    pub fn director(&mut self) -> Option<&str> {
+        self.ensure_metadata();
+        self.director.as_deref()
+    }
+
+    pub fn plot(&mut self) -> Option<&str> {
+        self.ensure_metadata();
+        self.plot.as_deref()
+    }
+
+    fn ensure_metadata(&mut self) {
+        if !self.metadata_fetched {
+            self.fetch_metadata();
         }
+    }
+
+    fn fetch_metadata(&mut self) {
+        let resp = omdb::fetch_metadata(&self.name, self.year);
+        if let Ok(r) = resp {
+            if r.Response == "True" {
+                self.genre = r.Genre;
+                self.director = r.Director;
+                self.plot = r.Plot;
+            }
+        }
+        self.metadata_fetched = true;
     }
 }
 
