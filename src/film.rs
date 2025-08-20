@@ -1,16 +1,22 @@
+use omdb::OmdbResponse;
 use time::{Date, format_description::parse};
 use std::{fmt::Display, io::{Cursor, Read}};
 use zip::ZipArchive;
 use csv::ReaderBuilder;
 use std::fs;
+use tokio::sync::OnceCell;
 
 mod omdb {
-    use reqwest::blocking::get;
-    use serde::Deserialize;
+    use once_cell::sync::Lazy;
+    use reqwest::Client;
+
+    static OMDB_CLIENT: Lazy<Client> = Lazy::new(|| {
+        Client::new()
+    });
 
     const OMDB_API_KEY: &str = "771c7c09";
 
-    #[derive(Debug, Deserialize)]
+    #[derive(Debug, serde::Deserialize)]
     pub struct OmdbResponse {
         pub Title: Option<String>,
         pub Year: Option<String>,
@@ -23,14 +29,18 @@ mod omdb {
         pub Error: Option<String>,
     }
 
-    pub fn fetch_metadata(title: &str, year: u32) -> Result<OmdbResponse, Box<dyn std::error::Error>> {
+    pub async fn fetch_metadata(
+        title: &str,
+        year: u32,
+    ) -> Result<OmdbResponse, Box<dyn std::error::Error>> {
         let url = format!(
             "http://www.omdbapi.com/?t={}&y={}&apikey={}",
             title, year, OMDB_API_KEY
         );
 
-        let resp: OmdbResponse = get(&url)?.json()?;
-        Ok(resp)
+        let resp = OMDB_CLIENT.get(&url).send().await?;
+        let json = resp.json::<OmdbResponse>().await?;
+        Ok(json)
     }
 }
 
@@ -38,11 +48,8 @@ mod omdb {
 pub struct Film {
     name: String,
     year: u32,
-    genre: Option<String>,
-    director: Option<String>,
-    plot: Option<String>,
     date_watched: Date,
-    metadata_fetched: bool
+    metadata: OnceCell<OmdbResponse>
 }
 
 impl Display for Film {
@@ -56,11 +63,8 @@ impl Film {
         Film {
             name: name.to_string(),
             year,
-            genre: None,
-            director: None,
-            plot: None,
             date_watched,
-            metadata_fetched: false
+            metadata: OnceCell::new()
         }
     }
 
@@ -76,37 +80,27 @@ impl Film {
         self.date_watched
     }
 
-    pub fn genre(&mut self) -> Option<&str> {
-        self.ensure_metadata();
-        self.genre.as_deref()
+    pub async fn genre(&self) -> Option<&String> {
+        self.metadata().await.Genre.as_ref()
     }
 
-    pub fn director(&mut self) -> Option<&str> {
-        self.ensure_metadata();
-        self.director.as_deref()
+    pub async fn director(&self) -> Option<&String> {
+        self.metadata().await.Director.as_ref()
     }
 
-    pub fn plot(&mut self) -> Option<&str> {
-        self.ensure_metadata();
-        self.plot.as_deref()
+    pub async fn plot(&self) -> Option<&String> {
+        self.metadata().await.Plot.as_ref()
     }
 
-    fn ensure_metadata(&mut self) {
-        if !self.metadata_fetched {
-            self.fetch_metadata();
-        }
-    }
-
-    fn fetch_metadata(&mut self) {
-        let resp = omdb::fetch_metadata(&self.name, self.year);
-        if let Ok(r) = resp {
-            if r.Response == "True" {
-                self.genre = r.Genre;
-                self.director = r.Director;
-                self.plot = r.Plot;
-            }
-        }
-        self.metadata_fetched = true;
+    async fn metadata(&self) -> &OmdbResponse {
+        self.metadata
+            .get_or_init(|| async {
+                // only one API call ever made per Film
+                omdb::fetch_metadata(&self.name, self.year)
+                    .await
+                    .unwrap() // handle errors properly in real code
+            })
+            .await
     }
 }
 

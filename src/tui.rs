@@ -31,9 +31,18 @@ impl Tui {
         Tui {ranker, selected: Selection::None, exit: false}
     }
 
-    pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
+    pub async fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         while !self.exit && !self.ranker.is_ranked() {
-            terminal.draw(|frame| self.draw(frame))?;
+            let left_view = match self.ranker.left() {
+                Some(f) => Some(FilmView::from(f).await),
+                None => None,
+            };
+
+            let right_view = match self.ranker.right() {
+                Some(f) => Some(FilmView::from(f).await),
+                None => None,
+            };
+            terminal.draw(|frame| { self.draw(frame, &left_view, &right_view); })?;
             match self.selected {
                 Selection::Left => {
                     // Briefly flash highlighted frame by sleeping
@@ -69,8 +78,8 @@ impl Tui {
         self.ranker.write_ranking();
     }
 
-    fn draw(&mut self, frame: &mut Frame) {
-        frame.render_widget(self, frame.area());
+    fn draw(&mut self, frame: &mut Frame<'_>, left_view: &Option<FilmView>, right_view: &Option<FilmView>) {
+        self.render(frame.area(), frame.buffer_mut(), left_view, right_view);
     }
 
     fn handle_events(&mut self) -> io::Result<()> {
@@ -105,10 +114,8 @@ impl Tui {
     fn select_right(&mut self) {
         self.selected = Selection::Right;
     }
-}
 
-impl Widget for &mut Tui {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+    fn render(& mut self, area: Rect, buf: &mut Buffer, left_view: &Option<FilmView>, right_view: &Option<FilmView>) {
         // Outer block with app title
         let app_title = Line::from(" filmsmash ".bold());
         let quit_instruction = Line::from(vec![
@@ -143,9 +150,8 @@ impl Widget for &mut Tui {
             left_block = left_block.border_style(Style::default().red().bold());
         }
 
-        if let Some(left_film) = self.ranker.left() {
-            let view = FilmView::from(left_film);
-            Paragraph::new(Text::from(&view))
+        if let Some(left_view) = left_view {
+            Paragraph::new(Text::from(left_view))
                 .alignment(Alignment::Center)
                 .block(left_block)
                 .wrap(Wrap { trim: true })
@@ -173,9 +179,8 @@ impl Widget for &mut Tui {
             right_block = right_block.border_style(Style::default().red().bold());
         }
 
-        if let Some(right_film) = self.ranker.right() {
-            let view = FilmView::from(right_film);
-            Paragraph::new(Text::from(&view))
+        if let Some(right_view) = right_view {
+            Paragraph::new(Text::from(right_view))
                 .alignment(Alignment::Center)
                 .block(right_block)
                 .wrap(Wrap { trim: true })
@@ -201,15 +206,36 @@ struct FilmView {
     date_watched: Date
 }
 
-impl From<&mut Film> for FilmView {
-    fn from(film: &mut Film) -> Self {
+impl FilmView {
+    async fn from(film: &Film) -> Self {
+        let name = film.name().to_string();
+        let year = film.year();
+
+        // Convert Option<&String> into owned String with default
+        let genre = film
+            .genre().await
+            .cloned()
+            .unwrap_or_else(|| "Unknown".to_string());
+
+        let director = film
+            .director().await
+            .cloned()
+            .unwrap_or_else(|| "Unknown".to_string());
+
+        let plot = film
+            .plot().await
+            .cloned()
+            .unwrap_or_else(|| "Plot unavailable.".to_string());
+
+        let date_watched = film.date_watched();
+
         FilmView {
-            name: film.name().to_string(),
-            year: film.year(),
-            genre: film.genre().unwrap_or("Unknown Genre").to_string(),
-            director: film.director().unwrap_or("Unknown").to_string(),
-            plot: film.plot().unwrap_or("No plot available").to_string(),
-            date_watched: film.date_watched(),
+            name,
+            year,
+            genre,
+            director,
+            plot,
+            date_watched,
         }
     }
 }

@@ -20,7 +20,8 @@ struct Args {
     elo: bool,
 }
 
-fn main() -> io::Result<()> {
+#[tokio::main]
+async fn main() -> io::Result<()> {
     let args = Args::parse();
     let file_path = args.file_path;
 
@@ -46,7 +47,7 @@ fn main() -> io::Result<()> {
         ranker::MergeSortRanker::new(films)
     );
     let mut tui = tui::Tui::new(ranker);
-    let res = tui.run(&mut terminal);
+    let res = tui.run(&mut terminal).await;
     ratatui::restore();
     tui.print_top_10();
     tui.write_ranking();
