@@ -1,5 +1,5 @@
 use time::{Date, format_description::parse};
-use std::io::{Cursor, Read};
+use std::{fmt::Display, io::{Cursor, Read}};
 use zip::ZipArchive;
 use csv::ReaderBuilder;
 use std::fs;
@@ -45,6 +45,12 @@ pub struct Film {
     metadata_fetched: bool
 }
 
+impl Display for Film {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
 impl Film {
     pub fn new(name: &str, year: u32, date_watched: Date) -> Film {
         Film {
@@ -64,6 +70,10 @@ impl Film {
 
     pub fn year(&self) -> u32 {
         self.year
+    }
+
+    pub fn date_watched(&self) -> Date {
+        self.date_watched
     }
 
     pub fn genre(&mut self) -> Option<&str> {

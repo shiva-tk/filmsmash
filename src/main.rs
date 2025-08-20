@@ -1,9 +1,11 @@
 mod film;
 mod ranker;
+mod tui;
 
 use clap::{error::ErrorKind, CommandFactory, Parser};
 use ranker::Ranker;
-use std::io::{self, Write};
+use std::io;
+use ratatui;
 
 #[derive(Parser, Debug)]
 #[command(name = "filmsmash")]
@@ -18,20 +20,7 @@ struct Args {
     elo: bool,
 }
 
-fn prompt(message: &str) -> String {
-    let mut input = String::new();
-
-    print!("{}", message);
-    io::stdout().flush().unwrap(); // flush to ensure prompt shows
-
-    io::stdin()
-        .read_line(&mut input)
-        .expect("failed to read line");
-
-    input.trim().to_string() // strip trailing newline
-}
-
-fn main() {
+fn main() -> io::Result<()> {
     let args = Args::parse();
     let file_path = args.file_path;
 
@@ -39,7 +28,7 @@ fn main() {
         unimplemented!("elo based ranking of films is not yet supported");
     }
 
-    let mut films = match film::get_letterboxd_watched(&file_path) {
+    let films = match film::get_letterboxd_watched(&file_path) {
         Ok(fs) => fs,
         Err(_) => {
             let mut cmd = Args::command();
@@ -52,30 +41,14 @@ fn main() {
         }
     };
 
-    let mut film_ranker = ranker::MergeSortRanker::new(films.into_iter().take(10).collect());
-    while !film_ranker.is_ranked() {
-        let left = film_ranker.left().unwrap();
-        let right = film_ranker.right().unwrap();
-
-        println!("Left: {}", left.name());
-        println!("Right: {}", right.name());
-
-        let mut choice = prompt(">>> ");
-        while (choice.trim() != "l" && choice.trim() != "r") {
-            println!("{}", choice);
-            println!("Pick your favourite film! Please enter `l` to choose the left film, and `r` to choose the right one.");
-            choice = prompt(">>> ");
-        }
-
-        if choice.trim() == "l" {
-            film_ranker.gt()
-        } else {
-            film_ranker.lt()
-        }
-    }
-
-    let ranking = film_ranker.into_ranking().unwrap();
-    for (i, f) in ranking.iter().enumerate() {
-        println!("{}. {}", i, f.name())
-    }
+    let mut terminal = ratatui::init();
+    let ranker = Box::new(
+        ranker::MergeSortRanker::new(films)
+    );
+    let mut tui = tui::Tui::new(ranker);
+    let res = tui.run(&mut terminal);
+    ratatui::restore();
+    tui.print_top_10();
+    tui.write_ranking();
+    res
 }
