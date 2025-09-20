@@ -15,3 +15,11 @@ In order to install ~filmsmash~:
 git clone https://github.com/shiva-tk/filmsmash.git
 cargo install --path filmsmash/
 #+end_src
+
+** Usage
+1. Download [[https://letterboxd.com/settings/data/][your Letterboxd data]]. You should download a ~.zip~ file.
+2. Run ~filmsmash~ on the downloaded data:
+
+#+begin_src
+filmsmash /path/to/letterboxd-data.zip
+#+end_src
