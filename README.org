@@ -5,7 +5,7 @@
 A tool to rank your favourite films on Letterboxd.
 Read the accompanying blogpost [[https://blog.shiva-tk.xyz/posts/total-ordering-films/][here]].
 
-* Installing
+** Installing
 In order to install ~filmsmash~:
 1. Follow the [[https://www.rust-lang.org/tools/install][instructions to install Rust]].
    This should install the ~cargo~ build tool.
