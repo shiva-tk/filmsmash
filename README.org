@@ -10,7 +10,8 @@ In order to install ~filmsmash~:
 1. Follow the [[https://www.rust-lang.org/tools/install][instructions to install Rust]].
    This should install the ~cargo~ build tool.
 2. Clone the repository, and build / install the binary:
-   #+begin_src
+
+#+begin_src
 git clone https://github.com/shiva-tk/filmsmash.git
 cargo install --path filmsmash/
-   #+end_src
+#+end_src
